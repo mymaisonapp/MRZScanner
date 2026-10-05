@@ -210,7 +210,7 @@ git push heroku main
 heroku open
 ```
 
-`POST /v1/scan` is then available at `https://<your-app>.herokuapp.com/v1/scan`. A Basic dyno is enough. The process loads the detection and recognition models while it boots, which takes a few seconds.
+`POST /v1/scan` is then available at `https://<your-app>.herokuapp.com/v1/scan`. A Basic dyno is enough. The process loads the detection and recognition models while it boots, which takes a few seconds. Heroku may set `WEB_CONCURRENCY` above 1; the server still runs a single worker so those models are loaded only once.
 
 ## Using the `do_center_crop` Parameter
 
