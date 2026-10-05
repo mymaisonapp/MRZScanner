@@ -1,11 +1,12 @@
 from enum import Enum
 from typing import List
 
-import capybara as cb
 import numpy as np
 
 from .det import Inference as DetectionInference
 from .rec import Inference as RecognitionInference
+from .runtime import (
+    Backend, EnumCheckMixin, centercrop, imwarp_quadrangle, is_numpy_img)
 from .spotting import Inference as SpottingInference
 from .utils import replace_digits, replace_letters, replace_sex
 
@@ -13,7 +14,7 @@ __all__ = [
     'MRZScanner', 'ModelType', 'SpottingInference', 'ErrorCodes']
 
 
-class ModelType(cb.EnumCheckMixin, Enum):
+class ModelType(EnumCheckMixin, Enum):
     spotting = 1
     two_stage = 2
     detection = 3
@@ -36,7 +37,7 @@ class MRZScanner:
         spotting_cfg: str = '20240919',
         detection_cfg: str = '20250222',
         recognition_cfg: str = '20250221',
-        backend: cb.Backend = cb.Backend.cpu,
+        backend: Backend = Backend.cpu,
         gpu_id: int = 0,
         **kwargs
     ) -> None:
@@ -48,7 +49,7 @@ class MRZScanner:
             spotting_cfg (str): Spotting model configuration.
             detection_cfg (str): Detection model configuration.
             recognition_cfg (str): Recognition model configuration.
-            backend (cb.Backend): Backend.
+            backend (Backend): Backend.
             gpu_id (int): GPU ID.
             **kwargs: Additional keyword arguments.
 
@@ -199,7 +200,7 @@ class MRZScanner:
         Raises:
             ErrorCodes: If invalid input format.
         """
-        if not cb.is_numpy_img(img):
+        if not is_numpy_img(img):
             return {
                 'mrz_polygon': [],
                 'mrz_texts': [''],
@@ -208,7 +209,7 @@ class MRZScanner:
 
         if do_center_crop:
             ori_h, ori_w = img.shape[:2]
-            img = cb.centercrop(img)
+            img = centercrop(img)
             new_h, new_w = img.shape[:2]
             shift = ((ori_w - new_w)//2, (ori_h - new_h)//2)
 
@@ -221,7 +222,7 @@ class MRZScanner:
             mrz_texts = self.recognizer(img=img)
         elif self.model_type == ModelType.two_stage:
             mrz_polygon = self.detector(img=img)
-            warp_img = cb.imwarp_quadrangle(img, mrz_polygon)
+            warp_img = imwarp_quadrangle(img, mrz_polygon)
             mrz_texts = self.recognizer(img=warp_img)
 
         if mrz_polygon is not None and do_center_crop:

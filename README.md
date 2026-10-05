@@ -83,6 +83,75 @@ If you have custom requirements, please feel free to contact us:
    pip install dist/mrzscanner_docsaid-*-py3-none-any.whl
    ```
 
+## HTTP API
+
+Upload a passport, visa, or identity-card image and receive the raw MRZ together with the fields parsed from ICAO 9303 (TD1, TD2, and TD3).
+
+Start the server:
+
+```bash
+mrz-scanner-api
+```
+
+It listens on `http://0.0.0.0:8000` locally. On Heroku it binds to `PORT`. Interactive documentation is at `/docs`. The recognition weights are already in the package, so startup does not download anything.
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/v1/scan" \
+  -F "image=@passport.jpg"
+```
+
+A response contains the raw MRZ and the parsed document. `parsed.valid` is true only when every check digit matches and both dates are real calendar dates. This example uses the ICAO specimen passport:
+
+```json
+{
+  "raw_mrz": "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<\nL898902C36UTO7408122F1204159ZE184226B<<<<<10",
+  "mrz_lines": [
+    "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<",
+    "L898902C36UTO7408122F1204159ZE184226B<<<<<10"
+  ],
+  "parsed": {
+    "format": "TD3",
+    "document_type": "P",
+    "document_subtype": "<",
+    "document_type_name": "passport",
+    "issuing_country": "UTO",
+    "surname": "ERIKSSON",
+    "given_names": "ANNA MARIA",
+    "document_number": "L898902C3",
+    "nationality": "UTO",
+    "date_of_birth": "1974-08-12",
+    "date_of_birth_raw": "740812",
+    "sex": "F",
+    "date_of_expiry": "2012-04-15",
+    "date_of_expiry_raw": "120415",
+    "optional_data": "ZE184226B",
+    "checks": {
+      "document_number": {"digit": "6", "calculated": "6", "valid": true},
+      "date_of_birth": {"digit": "2", "calculated": "2", "valid": true},
+      "date_of_expiry": {"digit": "9", "calculated": "9", "valid": true},
+      "optional_data": {"digit": "1", "calculated": "1", "valid": true},
+      "composite": {"digit": "0", "calculated": "0", "valid": true}
+    },
+    "valid": true
+  },
+  "mrz_polygon": [[120.0, 480.0], [860.0, 470.0], [862.0, 540.0], [122.0, 552.0]],
+  "message": "No error.",
+  "parse_error": null
+}
+```
+
+`mrz_polygon` lists the detected MRZ corners in image pixels. The coordinates in the sample above only show that shape; a real scan returns the corners found on the uploaded image. `message` is `No error.` when recognition succeeded. `parse_error` explains a layout the parser could not read; the raw text is still returned.
+
+Optional query parameters:
+
+| Parameter | Default | Meaning |
+| --- | --- | --- |
+| `do_center_crop` | `false` | Crop the center of the image before scanning. |
+| `do_postprocess` | `true` | Correct characters that cannot appear in a given MRZ field. |
+| `auto` | `true` | If check digits fail, retry the other crop and post-process combinations and keep the best read. |
+
+`GET /health` returns `{"status": "ok"}`.
+
 ## Model Inference
 
 First, don't worry about anything and just try running the following code to see if it executes properly:
@@ -129,7 +198,19 @@ If it runs successfully, let’s take a look at the details of the code below.
 > MRZScanner has been wrapped with `__call__`, so you can directly call the instance for inference.
 
 > [!NOTE]
-> We have designed an automatic model download feature. When the program detects that you are missing the model, it will automatically connect to our server to download it.
+> The ONNX weights ship inside the package (`mrzscanner/*/ckpt`). The scanner loads those files from disk and does not download them.
+
+## Deploy on Heroku
+
+The app is a normal Python process. Heroku's Python buildpack reads `.python-version`, `requirements.txt`, and `Procfile`. No Google Drive access and no extra apt packages are required.
+
+```bash
+heroku create
+git push heroku main
+heroku open
+```
+
+`POST /v1/scan` is then available at `https://<your-app>.herokuapp.com/v1/scan`. A Basic dyno is enough. The process loads the detection and recognition models while it boots, which takes a few seconds.
 
 ## Using the `do_center_crop` Parameter
 

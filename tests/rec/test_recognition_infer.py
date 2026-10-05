@@ -1,9 +1,9 @@
 from pathlib import Path
 
-import capybara as cb
 import numpy as np
 import pytest
 
+from mrzscanner import runtime as rt
 from mrzscanner.rec.infer import Inference
 
 
@@ -28,71 +28,33 @@ def dummy_imresize(img, size):
     return np.resize(img, (size[0], size[1]))
 
 
-def dummy_download(file_id, file_name, target_dir):
-    # 紀錄下載呼叫，不做實際動作
-    pass
-
-# Dummy Path 物件
-
-
-class DummyPath:
-    def __init__(self, path, exists_flag=True):
-        self.path = path
-        self.exists_flag = exists_flag
-
-    def exists(self):
-        return self.exists_flag
-
-# --- 測試案例 ---
-
-# 測試 __init__ 當模型檔案存在時不會呼叫下載
+def _use_fake_runtime(monkeypatch):
+    monkeypatch.setattr(rt, 'bundled_model', lambda directory, filename: Path(filename))
+    monkeypatch.setattr(rt, 'ONNXEngine', DummyONNXEngine)
+    monkeypatch.setattr(rt, 'imresize', dummy_imresize)
 
 
-def test_init_no_download(tmp_path, monkeypatch):
-    monkeypatch.setattr(cb, "get_curdir", lambda _: tmp_path)
-    monkeypatch.setattr(cb, "Path", lambda p: DummyPath(p, exists_flag=True))
-    download_called = {"called": False}
-
-    def dummy_download_google(file_id, file_name, target_dir):
-        download_called["called"] = True
-    monkeypatch.setattr(cb, "download_from_google", dummy_download_google)
-    monkeypatch.setattr(cb, "ONNXEngine", DummyONNXEngine)
-    monkeypatch.setattr(cb, "imresize", dummy_imresize)
-
+def test_init_uses_packaged_weights(monkeypatch):
+    """A present weight file is opened locally and nothing is downloaded."""
+    _use_fake_runtime(monkeypatch)
     inf = Inference()
-    # 驗證模型設定與屬性
     assert inf.image_size == (64, 640)
     assert inf.input_key == "input"
     assert inf.output_key == "output"
-    assert not download_called["called"]
-    # 驗證 text_dec 已正確建立
     assert hasattr(inf, "text_dec")
 
-# 測試 __init__ 當模型檔案不存在時會呼叫下載
 
-
-def test_init_with_download(tmp_path, monkeypatch):
-    monkeypatch.setattr(cb, "get_curdir", lambda _: tmp_path)
-    monkeypatch.setattr(cb, "Path", lambda p: DummyPath(p, exists_flag=False))
-    download_called = {"called": False}
-
-    def dummy_download_google(file_id, file_name, target_dir):
-        download_called["called"] = True
-    monkeypatch.setattr(cb, "download_from_google", dummy_download_google)
-    monkeypatch.setattr(cb, "ONNXEngine", DummyONNXEngine)
-    monkeypatch.setattr(cb, "imresize", dummy_imresize)
-
-    Inference()
-    assert download_called["called"]
+def test_missing_model_is_not_downloaded(tmp_path, monkeypatch):
+    """A missing weight file fails without contacting Google Drive."""
+    monkeypatch.setattr(rt, 'package_directory', lambda _file: tmp_path)
+    with pytest.raises(FileNotFoundError, match='Google Drive'):
+        Inference()
 
 # 測試 preprocess 方法 (啟用 normalization)
 
 
 def test_preprocess_normalize(tmp_path, monkeypatch):
-    monkeypatch.setattr(cb, "get_curdir", lambda _: tmp_path)
-    monkeypatch.setattr(cb, "Path", lambda p: DummyPath(p, exists_flag=True))
-    monkeypatch.setattr(cb, "ONNXEngine", DummyONNXEngine)
-    monkeypatch.setattr(cb, "imresize", dummy_imresize)
+    _use_fake_runtime(monkeypatch)
 
     inf = Inference()
     # 建立一個 shape 為 (100, 200, 3) 的 dummy 圖片
@@ -108,10 +70,7 @@ def test_preprocess_normalize(tmp_path, monkeypatch):
 
 
 def test_preprocess_no_normalize(tmp_path, monkeypatch):
-    monkeypatch.setattr(cb, "get_curdir", lambda _: tmp_path)
-    monkeypatch.setattr(cb, "Path", lambda p: DummyPath(p, exists_flag=True))
-    monkeypatch.setattr(cb, "ONNXEngine", DummyONNXEngine)
-    monkeypatch.setattr(cb, "imresize", dummy_imresize)
+    _use_fake_runtime(monkeypatch)
 
     inf = Inference()
     img = np.random.randint(0, 256, (100, 200, 3), dtype=np.uint8)
@@ -125,9 +84,7 @@ def test_preprocess_no_normalize(tmp_path, monkeypatch):
 
 
 def test_postprocess(monkeypatch, tmp_path):
-    monkeypatch.setattr(cb, "get_curdir", lambda _: tmp_path)
-    monkeypatch.setattr(cb, "Path", lambda p: DummyPath(p, exists_flag=True))
-    monkeypatch.setattr(cb, "ONNXEngine", DummyONNXEngine)
+    _use_fake_runtime(monkeypatch)
 
     inf = Inference()
     # 覆寫 text_dec，使其回傳固定字串
@@ -142,8 +99,6 @@ def test_postprocess(monkeypatch, tmp_path):
 
 
 def test_call(monkeypatch, tmp_path):
-    monkeypatch.setattr(cb, "get_curdir", lambda _: tmp_path)
-    monkeypatch.setattr(cb, "Path", lambda p: DummyPath(p, exists_flag=True))
     # 使用一個自訂的 Dummy ONNXEngine
 
     class DummyONNXEngineCall:
@@ -153,8 +108,9 @@ def test_call(monkeypatch, tmp_path):
 
         def __call__(self, **kwargs):
             return {"output": np.zeros((1, 5, 10), dtype=np.float32)}
-    monkeypatch.setattr(cb, "ONNXEngine", DummyONNXEngineCall)
-    monkeypatch.setattr(cb, "imresize", dummy_imresize)
+    monkeypatch.setattr(rt, 'bundled_model', lambda directory, filename: Path(filename))
+    monkeypatch.setattr(rt, 'ONNXEngine', DummyONNXEngineCall)
+    monkeypatch.setattr(rt, 'imresize', dummy_imresize)
 
     inf = Inference()
     # 覆寫 text_dec 使其回傳含有分隔符號的字串

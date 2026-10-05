@@ -1,11 +1,10 @@
 from pathlib import Path
-from typing import List
 
-import capybara as cb
 import cv2
 import numpy as np
 import pytest
 
+from mrzscanner import runtime as rt
 from mrzscanner.spotting.infer import Inference
 
 
@@ -28,64 +27,32 @@ def dummy_imresize(img, size):
     return np.zeros((size[0], size[1], channels), dtype=img.dtype)
 
 
-def dummy_download(file_id, file_name, target_dir):
-    pass
+def _use_fake_runtime(monkeypatch, engine=DummyONNXEngine):
+    monkeypatch.setattr(rt, 'bundled_model', lambda directory, filename: Path(filename))
+    monkeypatch.setattr(rt, 'ONNXEngine', engine)
+    monkeypatch.setattr(rt, 'imresize', dummy_imresize)
 
 
-class DummyPath:
-    def __init__(self, path, exists_flag=True):
-        self.path = path
-        self.exists_flag = exists_flag
-
-    def exists(self):
-        return self.exists_flag
-
-    def __truediv__(self, other):
-        return f"{self.path}/{other}"
-
-# --- Tests ---
-
-
-def test_init_no_download(tmp_path, monkeypatch):
-    monkeypatch.setattr(cb, "get_curdir", lambda _: tmp_path)
-    monkeypatch.setattr(cb, "Path", lambda p: DummyPath(p, exists_flag=True))
-    download_called = {"called": False}
-
-    def dummy_download_google(file_id, file_name, target_dir):
-        download_called["called"] = True
-    monkeypatch.setattr(cb, "download_from_google", dummy_download_google)
-    monkeypatch.setattr(cb, "ONNXEngine", DummyONNXEngine)
-    monkeypatch.setattr(cb, "imresize", dummy_imresize)
-
+def test_init_uses_packaged_weights(monkeypatch):
+    """A present weight file is opened locally and nothing is downloaded."""
+    _use_fake_runtime(monkeypatch)
     inf = Inference()
     assert inf.image_size == (512, 512)
     assert inf.input_key == "input"
     assert inf.output_key == "output"
-    assert not download_called["called"]
     assert hasattr(inf, "text_dec")
 
 
-def test_init_with_download(tmp_path, monkeypatch):
-    monkeypatch.setattr(cb, "get_curdir", lambda _: tmp_path)
-    monkeypatch.setattr(cb, "Path", lambda p: DummyPath(p, exists_flag=False))
-    download_called = {"called": False}
-
-    def dummy_download_google(file_id, file_name, target_dir):
-        download_called["called"] = True
-    monkeypatch.setattr(cb, "download_from_google", dummy_download_google)
-    monkeypatch.setattr(cb, "ONNXEngine", DummyONNXEngine)
-    monkeypatch.setattr(cb, "imresize", dummy_imresize)
-
-    Inference()
-    assert download_called["called"]
+def test_missing_model_is_not_downloaded(tmp_path, monkeypatch):
+    """A missing weight file fails without contacting Google Drive."""
+    monkeypatch.setattr(rt, 'package_directory', lambda _file: tmp_path)
+    with pytest.raises(FileNotFoundError, match='Google Drive'):
+        Inference()
 
 
-def test_preprocess_padding_horizontal(tmp_path, monkeypatch):
+def test_preprocess_padding_horizontal(monkeypatch):
     # Test when image height < width (H < W)
-    monkeypatch.setattr(cb, "get_curdir", lambda _: tmp_path)
-    monkeypatch.setattr(cb, "Path", lambda p: DummyPath(p, exists_flag=True))
-    monkeypatch.setattr(cb, "ONNXEngine", DummyONNXEngine)
-    monkeypatch.setattr(cb, "imresize", dummy_imresize)
+    _use_fake_runtime(monkeypatch)
 
     record = {}
 
@@ -112,12 +79,9 @@ def test_preprocess_padding_horizontal(tmp_path, monkeypatch):
     assert np.all(tensor == 0)
 
 
-def test_preprocess_padding_vertical(tmp_path, monkeypatch):
+def test_preprocess_padding_vertical(monkeypatch):
     # Test when image height >= width (H >= W)
-    monkeypatch.setattr(cb, "get_curdir", lambda _: tmp_path)
-    monkeypatch.setattr(cb, "Path", lambda p: DummyPath(p, exists_flag=True))
-    monkeypatch.setattr(cb, "ONNXEngine", DummyONNXEngine)
-    monkeypatch.setattr(cb, "imresize", dummy_imresize)
+    _use_fake_runtime(monkeypatch)
 
     record = {}
 
@@ -144,9 +108,7 @@ def test_preprocess_padding_vertical(tmp_path, monkeypatch):
     assert np.all(tensor == 0)
 
 
-def test_call(tmp_path, monkeypatch):
-    monkeypatch.setattr(cb, "get_curdir", lambda _: tmp_path)
-    monkeypatch.setattr(cb, "Path", lambda p: DummyPath(p, exists_flag=True))
+def test_call(monkeypatch):
 
     class DummyONNXEngineCall:
         def __init__(self, model_path, gpu_id, backend, **kwargs):
@@ -157,8 +119,7 @@ def test_call(tmp_path, monkeypatch):
             # Return a dummy output array.
             return {"output": np.zeros((1, 10, 20), dtype=np.float32)}
 
-    monkeypatch.setattr(cb, "ONNXEngine", DummyONNXEngineCall)
-    monkeypatch.setattr(cb, "imresize", dummy_imresize)
+    _use_fake_runtime(monkeypatch, DummyONNXEngineCall)
 
     inf = Inference()
     # Override text_dec to return a fixed string.

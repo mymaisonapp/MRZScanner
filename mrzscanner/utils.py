@@ -3,7 +3,8 @@ from enum import IntEnum
 from typing import Dict, List, Optional, Union
 
 import numpy as np
-from capybara import EnumCheckMixin
+
+from .runtime import EnumCheckMixin
 
 
 def replace_digits(text: str):

@@ -83,6 +83,35 @@ MRZ（Machine Readable Zone，機器可讀區）指護照、簽證、身分證�
    pip install dist/mrzscanner_docsaid-*-py3-none-any.whl
    ```
 
+## HTTP API
+
+上傳護照、簽證或身分證件影像，即可取得原始 MRZ，以及依 ICAO 9303（TD1、TD2、TD3）解析後的欄位。
+
+啟動服務：
+
+```bash
+mrz-scanner-api
+```
+
+服務在本機監聽 `http://0.0.0.0:8000`，在 Heroku 上則綁定 `PORT`。互動文件在 `/docs`。辨識權重已內含在套件中，啟動時不會下載任何檔案。
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/v1/scan" \
+  -F "image=@passport.jpg"
+```
+
+回傳 JSON 包含 `raw_mrz`（原始 MRZ 字串）與 `parsed`（證件種類、姓名、證號、國籍、出生日期、性別、到期日、選填資料與檢查碼）。只有在全部檢查碼正確且日期是有效日曆日時，`parsed.valid` 才會是 `true`。
+
+可用的查詢參數：
+
+| 參數 | 預設 | 說明 |
+| --- | --- | --- |
+| `do_center_crop` | `false` | 掃描前先裁切影像中央。 |
+| `do_postprocess` | `true` | 修正該欄位不可能出現的字元。 |
+| `auto` | `true` | 檢查碼未通過時，改試其他裁切與後處理組合，並保留最佳結果。 |
+
+`GET /health` 會回傳 `{"status": "ok"}`。
+
 ## 模型推論
 
 首先，什麼都別管，跑跑看以下程式碼，看一下能不能完整執行：
@@ -129,7 +158,19 @@ print(result)
 > MRZScanner 已經用 `__call__` 進行了封裝，因此你可以直接呼叫實例進行推論。
 
 > [!NOTE]
-> 我們有設計了自動下載模型的功能，當程式檢查你缺少模型時，會自動連接到我們的伺服器進行下載。
+> ONNX 權重已內含在套件的 `mrzscanner/*/ckpt`。掃描器直接從磁碟載入，不會再下載。
+
+## 部署到 Heroku
+
+這是一般的 Python 行程。Heroku 的 Python buildpack 會讀取 `.python-version`、`requirements.txt` 與 `Procfile`。不需要 Google Drive，也不需要額外的 apt 套件。
+
+```bash
+heroku create
+git push heroku main
+heroku open
+```
+
+部署完成後，`POST /v1/scan` 位於 `https://<your-app>.herokuapp.com/v1/scan`。Basic dyno 即可。行程在開機時載入偵測與辨識模型，需要數秒。
 
 ## 使用 `do_center_crop` 參數
 

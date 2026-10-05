@@ -161,6 +161,10 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-*onnx*
+# Packaged MRZ weights are tracked. Ignore other ONNX exports.
+*.onnx
+!mrzscanner/det/ckpt/*.onnx
+!mrzscanner/rec/ckpt/*.onnx
+!mrzscanner/spotting/ckpt/*.onnx
 *demo*
 *benchmark*
