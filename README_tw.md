@@ -83,6 +83,35 @@ MRZ（Machine Readable Zone，機器可讀區）指護照、簽證、身分證�
    pip install dist/mrzscanner_docsaid-*-py3-none-any.whl
    ```
 
+## HTTP API
+
+上傳護照、簽證或身分證件影像，即可取得原始 MRZ，以及依 ICAO 9303（TD1、TD2、TD3）解析後的欄位。
+
+啟動服務：
+
+```bash
+mrz-scanner-api
+```
+
+服務監聽 `http://0.0.0.0:8000`，互動文件在 `/docs`。第一次掃描會下載辨識模型（約 70 MB）到套件的 `ckpt` 目錄。
+
+```bash
+curl -s -X POST "http://127.0.0.1:8000/v1/scan" \
+  -F "image=@passport.jpg"
+```
+
+回傳 JSON 包含 `raw_mrz`（原始 MRZ 字串）與 `parsed`（證件種類、姓名、證號、國籍、出生日期、性別、到期日、選填資料與檢查碼）。只有在全部檢查碼正確且日期是有效日曆日時，`parsed.valid` 才會是 `true`。
+
+可用的查詢參數：
+
+| 參數 | 預設 | 說明 |
+| --- | --- | --- |
+| `do_center_crop` | `false` | 掃描前先裁切影像中央。 |
+| `do_postprocess` | `true` | 修正該欄位不可能出現的字元。 |
+| `auto` | `true` | 檢查碼未通過時，改試其他裁切與後處理組合，並保留最佳結果。 |
+
+`GET /health` 會回傳 `{"status": "ok"}`。
+
 ## 模型推論
 
 首先，什麼都別管，跑跑看以下程式碼，看一下能不能完整執行：
