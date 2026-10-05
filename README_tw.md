@@ -93,7 +93,7 @@ MRZ（Machine Readable Zone，機器可讀區）指護照、簽證、身分證�
 mrz-scanner-api
 ```
 
-服務監聽 `http://0.0.0.0:8000`，互動文件在 `/docs`。第一次掃描會下載辨識模型（約 70 MB）到套件的 `ckpt` 目錄。
+服務在本機監聽 `http://0.0.0.0:8000`，在 Heroku 上則綁定 `PORT`。互動文件在 `/docs`。辨識權重已內含在套件中，啟動時不會下載任何檔案。
 
 ```bash
 curl -s -X POST "http://127.0.0.1:8000/v1/scan" \
@@ -158,7 +158,19 @@ print(result)
 > MRZScanner 已經用 `__call__` 進行了封裝，因此你可以直接呼叫實例進行推論。
 
 > [!NOTE]
-> 我們有設計了自動下載模型的功能，當程式檢查你缺少模型時，會自動連接到我們的伺服器進行下載。
+> ONNX 權重已內含在套件的 `mrzscanner/*/ckpt`。掃描器直接從磁碟載入，不會再下載。
+
+## 部署到 Heroku
+
+這是一般的 Python 行程。Heroku 的 Python buildpack 會讀取 `.python-version`、`requirements.txt` 與 `Procfile`。不需要 Google Drive，也不需要額外的 apt 套件。
+
+```bash
+heroku create
+git push heroku main
+heroku open
+```
+
+部署完成後，`POST /v1/scan` 位於 `https://<your-app>.herokuapp.com/v1/scan`。Basic dyno 即可。行程在開機時載入偵測與辨識模型，需要數秒。
 
 ## 使用 `do_center_crop` 參數
 

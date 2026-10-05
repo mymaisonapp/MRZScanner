@@ -1,0 +1,13 @@
+{
+  "name": "MRZ Scanner",
+  "description": "Scan a travel document image and return the raw MRZ and parsed fields.",
+  "keywords": ["mrz", "passport", "fastapi"],
+  "stack": "heroku-24",
+  "repository": "https://github.com/mymaisonapp/MRZScanner",
+  "env": {
+    "WEB_CONCURRENCY": {
+      "description": "One process. Each process loads the ONNX models into memory.",
+      "value": "1"
+    }
+  }
+}

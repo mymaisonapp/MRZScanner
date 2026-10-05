@@ -1,15 +1,15 @@
-import capybara as cb
 import numpy as np
 import pytest
 
 from mrzscanner.det.infer import Inference
+from mrzscanner.runtime import Backend
 
 
 @pytest.fixture
 def fake_inference():
     # 建立 Inference 物件，方便後續測試使用
     # 這邊的 GPU ID 與 backend 可根據環境需求自行調整
-    return Inference(gpu_id=0, backend=cb.Backend.cpu, model_cfg='20250222')
+    return Inference(gpu_id=0, backend=Backend.cpu, model_cfg='20250222')
 
 
 def test_inference_init(fake_inference):

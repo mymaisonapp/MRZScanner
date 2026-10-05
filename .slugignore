@@ -1,0 +1,7 @@
+# The same weights are installed into the package during the build.
+mrzscanner/det/ckpt/*.onnx
+mrzscanner/rec/ckpt/*.onnx
+mrzscanner/spotting/ckpt/*.onnx
+tests
+dataset
+docs

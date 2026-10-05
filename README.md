@@ -93,7 +93,7 @@ Start the server:
 mrz-scanner-api
 ```
 
-It listens on `http://0.0.0.0:8000`. Interactive documentation is at `/docs`. The first scan downloads the recognition models (about 70 MB) into the package `ckpt` directories.
+It listens on `http://0.0.0.0:8000` locally. On Heroku it binds to `PORT`. Interactive documentation is at `/docs`. The recognition weights are already in the package, so startup does not download anything.
 
 ```bash
 curl -s -X POST "http://127.0.0.1:8000/v1/scan" \
@@ -198,7 +198,19 @@ If it runs successfully, let’s take a look at the details of the code below.
 > MRZScanner has been wrapped with `__call__`, so you can directly call the instance for inference.
 
 > [!NOTE]
-> We have designed an automatic model download feature. When the program detects that you are missing the model, it will automatically connect to our server to download it.
+> The ONNX weights ship inside the package (`mrzscanner/*/ckpt`). The scanner loads those files from disk and does not download them.
+
+## Deploy on Heroku
+
+The app is a normal Python process. Heroku's Python buildpack reads `.python-version`, `requirements.txt`, and `Procfile`. No Google Drive access and no extra apt packages are required.
+
+```bash
+heroku create
+git push heroku main
+heroku open
+```
+
+`POST /v1/scan` is then available at `https://<your-app>.herokuapp.com/v1/scan`. A Basic dyno is enough. The process loads the detection and recognition models while it boots, which takes a few seconds.
 
 ## Using the `do_center_crop` Parameter
 

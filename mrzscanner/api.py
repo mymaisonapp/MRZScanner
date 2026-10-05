@@ -138,7 +138,8 @@ def main() -> None:
     import uvicorn
 
     host = os.environ.get('MRZ_HOST', '0.0.0.0')
-    port = int(os.environ.get('MRZ_PORT', '8000'))
+    # Heroku sets PORT. MRZ_PORT remains available for local runs.
+    port = int(os.environ.get('PORT', os.environ.get('MRZ_PORT', '8000')))
     uvicorn.run(
         create_app(warmup=True),
         host=host,
