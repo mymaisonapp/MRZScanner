@@ -6,9 +6,10 @@ with the package. Startup never downloads weights, including from Google Drive.
 
 from __future__ import annotations
 
+import sys
 from enum import Enum
 from pathlib import Path
-from typing import Any, Sequence, Tuple, Union
+from typing import Any, Optional, Sequence, Tuple, Union
 
 import cv2
 import numpy as np
@@ -97,16 +98,35 @@ def package_directory(file: str) -> Path:
 def bundled_model(directory: Union[str, Path], filename: str) -> Path:
     """Return a weight file shipped in ``directory/ckpt``.
 
+    ``python -m`` puts the application root first on ``sys.path``. On Heroku
+    that imports the slug checkout, which can shadow the copy installed into
+    site-packages. If the checkout copy is missing, the installed copy is used.
+
     Raises FileNotFoundError instead of fetching the file from Google Drive.
     """
-    path = Path(directory) / 'ckpt' / filename
-    if not path.is_file():
+    directory = Path(directory)
+    direct = directory / 'ckpt' / filename
+    found = direct if direct.is_file() else _installed_model(directory, filename)
+    if found is None:
         raise FileNotFoundError(
-            f'MRZ model {filename} is missing at {path}. '
+            f'MRZ model {filename} is missing at {direct}. '
             'The weights ship inside the mrzscanner package and are not '
             'downloaded from Google Drive.'
         )
-    return path
+    print(f'Loading MRZ model {found}', flush=True)
+    return found
+
+
+def _installed_model(directory: Path, filename: str) -> Optional[Path]:
+    """Search ``sys.path`` for the same package-relative weight file."""
+    component = directory.name
+    for entry in sys.path:
+        if not entry:
+            continue
+        candidate = Path(entry) / 'mrzscanner' / component / 'ckpt' / filename
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def is_numpy_img(image: Any) -> bool:

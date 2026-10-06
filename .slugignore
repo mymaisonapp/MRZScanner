@@ -1,7 +1,5 @@
-# The same weights are installed into the package during the build.
-mrzscanner/det/ckpt/*.onnx
-mrzscanner/rec/ckpt/*.onnx
-mrzscanner/spotting/ckpt/*.onnx
+# Keep the ONNX weights. `python -m` imports this checkout before site-packages,
+# so stripping mrzscanner/*/ckpt/*.onnx makes the dyno crash on boot.
 tests
 dataset
 docs
