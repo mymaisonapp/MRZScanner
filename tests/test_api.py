@@ -124,7 +124,38 @@ def test_auto_retries_until_check_digits_pass():
 
     assert response.status_code == 200
     assert response.json()['parsed']['valid'] is True
-    assert scanner.calls == [(False, True), (False, False), (True, True)]
+    assert scanner.calls == (
+        [(False, True)] * 4
+        + [(False, False), (True, True)]
+    )
+
+
+def test_sideways_document_is_rotated_until_it_validates():
+    """A card photographed on its side is read after a quarter turn."""
+
+    class OrientationScanner:
+        def __init__(self):
+            self.shapes = []
+
+        def __call__(self, image, do_center_crop=False, do_postprocess=False):
+            self.shapes.append(image.shape[:2])
+            if image.shape[0] > image.shape[1]:
+                return _result([TD3_LINE_1, TD3_LINE_2])
+            return _result(['NOT-AN-MRZ'])
+
+    scanner = OrientationScanner()
+    with _client(scanner) as client:
+        response = client.post(
+            '/v1/scan',
+            files={'image': ('card.jpg', _jpeg_bytes(), 'image/jpeg')},
+        )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body['parsed']['valid'] is True
+    assert scanner.shapes[0] == (32, 48)
+    assert scanner.shapes[1][0] > scanner.shapes[1][1]
+    assert body['mrz_polygon'][0] == [45.0, 1.5]
 
 
 def test_auto_can_be_disabled():

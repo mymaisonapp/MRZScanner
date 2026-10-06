@@ -94,7 +94,7 @@ def create_app(
         ),
         auto: bool = Query(
             True,
-            description='Retry other crop and post-process settings when check digits fail.',
+            description='Retry other orientations, crops, and post-process settings when check digits fail.',
         ),
     ):
         """Read the MRZ from an uploaded document image."""
