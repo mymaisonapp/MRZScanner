@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Sequence, Tuple
 
+import cv2
 import numpy as np
 
 from .parser import MRZParseError, parse_mrz
@@ -31,9 +32,10 @@ def scan_image(
 ) -> Dict:
     """Scan `image` and return the raw MRZ plus parsed ICAO fields.
 
-    When `auto` is set and the first read does not pass every check digit,
-    the other crop and post-process combinations are tried. The fully valid
-    read wins; otherwise the read with the most valid check digits is returned.
+    When `auto` is set and a read does not pass every check digit, the other
+    orientations are tried before the other crop and post-process settings.
+    The fully valid read wins; otherwise the read with the most valid check
+    digits is returned. Polygon points are mapped back onto the uploaded image.
     """
     primary = (bool(do_center_crop), bool(do_postprocess))
     attempts: List[Attempt] = [primary]
@@ -44,22 +46,64 @@ def scan_image(
 
     best_payload = None
     best_score = None
-    for crop, postprocess in attempts:
+
+    def consider(frame, rotation, crop, postprocess) -> bool:
+        nonlocal best_payload, best_score
         result = scanner(
-            image.copy(),
+            frame,
             do_center_crop=crop,
             do_postprocess=postprocess,
         )
         payload = build_scan_payload(result)
+        payload['mrz_polygon'] = _unmap_polygon(payload['mrz_polygon'], rotation)
         score = _score(payload)
         if best_score is None or score > best_score:
             best_payload = payload
             best_score = score
-        parsed = payload.get('parsed') or {}
-        if parsed.get('valid'):
-            return payload
+        return bool((payload.get('parsed') or {}).get('valid'))
+
+    if consider(image, None, primary[0], primary[1]):
+        return best_payload
+    if not auto:
+        return best_payload
+
+    height, width = image.shape[:2]
+    rotations = (
+        (cv2.ROTATE_90_COUNTERCLOCKWISE, 'ccw'),
+        (cv2.ROTATE_90_CLOCKWISE, 'cw'),
+        (cv2.ROTATE_180, 'half'),
+    )
+    for rotate_code, kind in rotations:
+        frame = cv2.rotate(image, rotate_code)
+        if consider(frame, (kind, width, height), primary[0], primary[1]):
+            return best_payload
+
+    for crop, postprocess in attempts:
+        if (crop, postprocess) == primary:
+            continue
+        if consider(image, None, crop, postprocess):
+            return best_payload
 
     return best_payload
+
+
+def _unmap_polygon(polygon, rotation):
+    """Map a polygon from a rotated frame back to the uploaded image."""
+    if not polygon or rotation is None:
+        return polygon
+    kind, width, height = rotation
+    mapped = []
+    for x_coord, y_coord in polygon:
+        if kind == 'ccw':
+            mapped.append([float(width - 1 - y_coord), float(x_coord)])
+        elif kind == 'cw':
+            mapped.append([float(y_coord), float(height - 1 - x_coord)])
+        else:
+            mapped.append([
+                float(width - 1 - x_coord),
+                float(height - 1 - y_coord),
+            ])
+    return mapped
 
 
 def build_scan_payload(result: Dict) -> Dict:

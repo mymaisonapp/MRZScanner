@@ -6,14 +6,21 @@ with the package. Startup never downloads weights, including from Google Drive.
 
 from __future__ import annotations
 
+import os
 import sys
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, Sequence, Tuple, Union
 
+os.environ.setdefault('OMP_NUM_THREADS', '1')
+os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
+os.environ.setdefault('MKL_NUM_THREADS', '1')
+
 import cv2
 import numpy as np
 import onnxruntime as ort
+
+cv2.setNumThreads(1)
 
 _PolygonLike = Union[np.ndarray, Sequence, 'Polygon']
 
@@ -63,7 +70,13 @@ class ONNXEngine:
             providers = ['CPUExecutionProvider']
 
         options = ort.SessionOptions()
-        options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        # A 512 MB Heroku dyno cannot hold the default CPU arena. One thread
+        # and no arena keeps a scan around 200 MB instead of about 700 MB.
+        options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_EXTENDED
+        options.intra_op_num_threads = 1
+        options.inter_op_num_threads = 1
+        options.enable_cpu_mem_arena = False
+        options.enable_mem_pattern = False
         options.log_severity_level = 2
         self.model_path = str(model_path)
         self.session = ort.InferenceSession(

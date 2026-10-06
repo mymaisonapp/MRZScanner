@@ -148,7 +148,7 @@ Optional query parameters:
 | --- | --- | --- |
 | `do_center_crop` | `false` | Crop the center of the image before scanning. |
 | `do_postprocess` | `true` | Correct characters that cannot appear in a given MRZ field. |
-| `auto` | `true` | If check digits fail, retry the other crop and post-process combinations and keep the best read. |
+| `auto` | `true` | If check digits fail, try other orientations, then the other crop and post-process combinations, and keep the best read. |
 
 `GET /health` returns `{"status": "ok"}`.
 
@@ -210,7 +210,7 @@ git push heroku main
 heroku open
 ```
 
-`POST /v1/scan` is then available at `https://<your-app>.herokuapp.com/v1/scan`. A Basic dyno is enough. The process loads the detection and recognition models while it boots, which takes a few seconds. Heroku may set `WEB_CONCURRENCY` above 1; the server still runs a single worker so those models are loaded only once.
+`POST /v1/scan` is then available at `https://<your-app>.herokuapp.com/v1/scan`. A Basic dyno is enough. The process loads the detection and recognition models while it boots, which takes a few seconds. Heroku may set `WEB_CONCURRENCY` above 1; the server still runs a single worker and a single inference thread so the models fit in a 512 MB dyno. Photos can be sideways; a scan turns the image until the check digits pass.
 
 ## Using the `do_center_crop` Parameter
 
