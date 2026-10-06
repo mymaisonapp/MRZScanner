@@ -51,6 +51,39 @@ def test_health():
     assert response.json() == {'status': 'ok'}
 
 
+def test_root_points_at_the_scan_endpoint():
+    """Opening the service URL explains where to send a document."""
+    with _client(FakeScanner({})) as client:
+        response = client.get('/')
+    assert response.status_code == 200
+    body = response.json()
+    assert body['scan'] == '/v1/scan'
+    assert body['docs'] == '/docs'
+
+
+def test_main_keeps_a_single_worker_on_heroku(monkeypatch):
+    """WEB_CONCURRENCY must not turn one dyno into multiple model copies."""
+    import uvicorn
+
+    captured = {}
+
+    def fake_run(*args, **kwargs):
+        captured['args'] = args
+        captured['kwargs'] = kwargs
+
+    monkeypatch.setenv('WEB_CONCURRENCY', '2')
+    monkeypatch.setenv('PORT', '4321')
+    monkeypatch.setattr(uvicorn, 'run', fake_run)
+
+    from mrzscanner.api import main
+    main()
+
+    assert captured['args'] == ('mrzscanner.api:app',)
+    assert captured['kwargs']['workers'] == 1
+    assert captured['kwargs']['port'] == 4321
+    assert captured['kwargs']['host'] == '0.0.0.0'
+
+
 def test_scan_returns_raw_mrz_and_parsed_fields():
     """A document image comes back as raw MRZ text plus parsed JSON."""
     scanner = FakeScanner({

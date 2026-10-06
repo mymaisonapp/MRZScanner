@@ -170,7 +170,7 @@ git push heroku main
 heroku open
 ```
 
-部署完成後，`POST /v1/scan` 位於 `https://<your-app>.herokuapp.com/v1/scan`。Basic dyno 即可。行程在開機時載入偵測與辨識模型，需要數秒。
+部署完成後，`POST /v1/scan` 位於 `https://<your-app>.herokuapp.com/v1/scan`。Basic dyno 即可。行程在開機時載入偵測與辨識模型，需要數秒。即使 Heroku 把 `WEB_CONCURRENCY` 設成大於 1，服務仍只啟動一個 worker，模型只會載入一次。
 
 ## 使用 `do_center_crop` 參數
 

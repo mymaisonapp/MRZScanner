@@ -54,6 +54,16 @@ def create_app(
         lifespan=lifespan,
     )
 
+    @app.get('/')
+    def root():
+        """Tell a browser where to scan a document and read the docs."""
+        return {
+            'service': 'mrzscanner',
+            'scan': '/v1/scan',
+            'docs': '/docs',
+            'health': '/health',
+        }
+
     @app.get('/health')
     def health():
         """Report that the API process is running."""
@@ -130,20 +140,29 @@ def _get_scanner(app: FastAPI):
         return app.state.scanner
 
 
-app = create_app()
+# Imported by `uvicorn mrzscanner.api:app`. Models load in the lifespan,
+# before the process accepts requests.
+app = create_app(warmup=True)
 
 
 def main() -> None:
-    """Run the API. Models load before the server accepts requests."""
+    """Run the API.
+
+    Heroku's Python buildpack exports WEB_CONCURRENCY (often 2). Uvicorn treats
+    that as a worker count and then refuses to start unless the app is an
+    import string. One worker is required here: each worker loads the ONNX
+    models, and a 512 MB dyno cannot hold two copies.
+    """
     import uvicorn
 
     host = os.environ.get('MRZ_HOST', '0.0.0.0')
     # Heroku sets PORT. MRZ_PORT remains available for local runs.
     port = int(os.environ.get('PORT', os.environ.get('MRZ_PORT', '8000')))
     uvicorn.run(
-        create_app(warmup=True),
+        'mrzscanner.api:app',
         host=host,
         port=port,
+        workers=1,
     )
 
 
